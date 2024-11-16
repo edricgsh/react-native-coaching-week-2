@@ -23,7 +23,7 @@
    - Keychain
 
 3. **Is there StrictMode in ReactNative?**
-   - I saw sources saying that it is, but when I run it locally, it doesn't seem to be there.
+   - I saw sources saying that it is. But when I try to do it locally, the `useEffect` did not run twice like how the React project should work 
 
 ## 1. Navigation Fundamentals
 
