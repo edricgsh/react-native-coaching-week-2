@@ -596,3 +596,84 @@ function StopWatch() {
   );
 }
 ```
+
+
+## 4. React Native CI/CD Pipeline
+```mermaid
+graph TD
+    A[Developer Pushes Code to Git Repository] --> B[CI Pipeline Triggered]
+    B --> C[Install Dependencies]
+    C --> D[Linting and Code Formatting]
+    D --> E[Run Unit Tests]
+    E --> F{Build for Testing?}
+    F -->|Yes| G[Build Android APK and iOS IPA for Testing]
+    F -->|No| H[Skip Build]
+    G --> I[Upload Build to Firebase App Distribution/TestFlight]
+    I --> J[Notify QA Team]
+    J --> K[QA Tests the Build]
+    K --> L{Bugs Found?}
+    L -->|Yes| M[Report Bugs to Developer]
+    L -->|No| N[Approve Build for Staging]
+    N --> O[Deploy to Staging Environment]
+    O --> P[Notify Product Team]
+    P --> Q[Product Team Tests Staging Build]
+    Q --> R{Approved for Production?}
+    R -->|Yes| S[Deploy to Production]
+    R -->|No| T[Reject and Notify Developer]
+    S --> U[Notify Product Team and QA]
+    U --> V[Release Build to App Stores]    
+```
+
+Example GitHub Actions Workflow for EAS Distribution
+Here’s how you can automate the build and distribution process using GitHub Actions:
+
+```yaml
+version: 2.1
+
+jobs:
+  build-and-distribute:
+    docker:
+      - image: cimg/node:18.0.0
+    steps:
+      - checkout
+
+      - run:
+          name: Install dependencies
+          command: yarn install
+
+      - run:
+          name: Run unit tests
+          command: yarn test
+
+      - run:
+          name: Install EAS CLI
+          command: npm install -g eas-cli
+
+      - run:
+          name: Log in to Expo
+          command: eas login --token "$EXPO_TOKEN"
+          environment:
+            EXPO_TOKEN: $EXPO_TOKEN
+
+      - run:
+          name: Build Android APK
+          command: eas build --platform android --profile production --non-interactive
+          environment:
+            EXPO_TOKEN: $EXPO_TOKEN
+
+      - run:
+          name: Distribute Android APK to Google Play Internal Testing
+          command: eas submit --platform android --profile production --non-interactive
+          environment:
+            EXPO_TOKEN: $EXPO_TOKEN
+
+workflows:
+  version: 2
+  build-and-distribute:
+    jobs:
+      - build-and-distribute:
+          filters:
+            branches:
+              only:
+                - main
+```
