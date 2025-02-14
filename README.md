@@ -5,8 +5,7 @@
 | Session                          | Duration   |
 | -------------------------------- | ---------- |
 | 1. Recap                         | 30 minutes |
-| 2. Project Demo                  | 1.5 hours  |
-| 3. Project Briefing & Discussion | 1 hour     |
+| 2. Project Briefing & Discussion | 2.5 hour     |
 
 # Recap
 
@@ -21,9 +20,6 @@
    - AsyncStorage
    - SQLite
    - Keychain
-
-3. **Is there StrictMode in ReactNative?**
-   - I saw sources saying that it is. But when I try to do it locally, the `useEffect` did not run twice like how the React project should work 
 
 ## 1. Navigation Fundamentals
 
@@ -260,6 +256,343 @@ function ImagePickerScreen() {
     <View>
       <Button title="Pick an image from camera roll" onPress={pickImage} />
     </View>
+  );
+}
+```
+# React Core Concepts
+
+## 3. React Fundamentals
+
+### 3.1 useEffect Deep Dive
+
+The useEffect hook is used for handling side effects in functional components. Understanding cleanup functions is crucial for preventing memory leaks and ensuring proper resource management.
+
+#### Cleanup Function Purpose
+
+The cleanup function runs before the component unmounts and before re-running the effect (if dependencies change). It's essential for:
+- Unsubscribing from subscriptions
+- Canceling network requests
+- Clearing intervals/timeouts
+- Removing event listeners
+- Closing WebSocket connections
+
+```javascript
+import { useEffect } from 'react';
+
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    // Setup websocket connection
+    const ws = new WebSocket(`ws://chat.example.com/${roomId}`);
+    
+    ws.addEventListener('message', handleMessage);
+    
+    // Cleanup function
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+      ws.close();
+    };
+  }, [roomId]); // Re-run effect if roomId changes
+
+  return <div>Chat Room</div>;
+}
+```
+
+Common Use Cases for Cleanup:
+
+1. **Event Listeners**:
+```javascript
+function WindowResizeTracker() {
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return <div>Window width: {windowWidth}</div>;
+}
+```
+
+2. **Intervals and Timeouts**:
+```javascript
+function Timer() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId); // Cleanup to prevent memory leaks
+    };
+  }, []);
+
+  return <div>Count: {count}</div>;
+}
+```
+
+3. **API Subscriptions**:
+```javascript
+function UserStatus({ userId }) {
+  const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true; // Flag to prevent setting state on unmounted component
+
+    const subscribeToUserStatus = async () => {
+      const unsubscribe = await api.subscribeToStatus(userId, (status) => {
+        if (isMounted) {
+          setIsOnline(status.isOnline);
+        }
+      });
+
+      return unsubscribe;
+    };
+
+    const unsubscribe = subscribeToUserStatus();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [userId]);
+
+  return <div>{isOnline ? '🟢 Online' : '⚫️ Offline'}</div>;
+}
+```
+
+### 3.2 useContext
+
+useContext provides a way to pass data through the component tree without manually passing props at every level. It's particularly useful for sharing global state or theme data.
+
+#### Basic Implementation
+
+```javascript
+import { createContext, useContext, useState } from 'react';
+
+// Create context with default value
+const ThemeContext = createContext('light');
+
+// Provider Component
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState('light');
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+// Consumer Component
+function ThemedButton() {
+  const { theme, setTheme } = useContext(ThemeContext);
+
+  return (
+    <button
+      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+      style={{
+        background: theme === 'light' ? '#fff' : '#333',
+        color: theme === 'light' ? '#333' : '#fff'
+      }}
+    >
+      Current theme: {theme}
+    </button>
+  );
+}
+
+// Usage
+function App() {
+  return (
+    <ThemeProvider>
+      <div>
+        <ThemedButton />
+        {/* Other components can access theme context */}
+      </div>
+    </ThemeProvider>
+  );
+}
+```
+
+Common Use Cases:
+1. Theme Management
+2. User Authentication State
+3. Language/Localization
+4. Feature Flags
+5. Global UI State (loading, error states)
+
+### 3.3 Custom Hooks
+
+Custom hooks allow you to extract component logic into reusable functions. They should start with "use" and can call other hooks.
+
+#### Example: useLocalStorage Hook
+
+```javascript
+function useLocalStorage(key, initialValue) {
+  // State to store our value
+  // Pass initial state function to useState so logic is only executed once
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(error);
+      return initialValue;
+    }
+  });
+
+  // Return a wrapped version of useState's setter function
+  const setValue = value => {
+    try {
+      // Allow value to be a function so we have same API as useState
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
+
+// Usage
+function App() {
+  const [name, setName] = useLocalStorage('name', 'Bob');
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+      />
+    </div>
+  );
+}
+```
+
+#### Example: useFetch Hook
+
+```javascript
+function useFetch(url) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(url, {
+          signal: abortController.signal
+        });
+        const json = await response.json();
+        setData(json);
+        setLoading(false);
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.log('Fetch aborted');
+        } else {
+          setError(error);
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [url]);
+
+  return { data, loading, error };
+}
+
+// Usage
+function UserProfile({ userId }) {
+  const { data, loading, error } = useFetch(`/api/users/${userId}`);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  
+  return <div>User: {data.name}</div>;
+}
+```
+
+### 3.4 useRef
+
+useRef is a hook that provides a mutable ref object whose .current property is initialized with the passed argument. The ref object persists for the full lifetime of the component.
+
+Key Characteristics:
+- Doesn't trigger re-renders when value changes
+- Persists between renders
+- Can store any mutable value
+- Commonly used to access DOM elements directly
+
+#### Common Use Cases
+
+1. **Accessing DOM Elements**:
+```javascript
+function TextInputWithFocus() {
+  const inputRef = useRef(null);
+
+  const focusInput = () => {
+    inputRef.current.focus();
+  };
+
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus Input</button>
+    </>
+  );
+}
+```
+
+2. **Instance Variables (Mutable Values)**:
+```javascript
+function StopWatch() {
+  const [count, setCount] = useState(0);
+  const intervalRef = useRef(null);
+
+  const start = () => {
+    if (intervalRef.current !== null) return;
+    intervalRef.current = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+  };
+
+  const stop = () => {
+    if (intervalRef.current === null) return;
+    clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div>
+      <h1>{count}s</h1>
+      <button onClick={start}>Start</button>
+      <button onClick={stop}>Stop</button>
+    </div>
   );
 }
 ```
